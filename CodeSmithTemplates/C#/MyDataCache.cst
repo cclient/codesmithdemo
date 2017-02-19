@@ -1,0 +1,49 @@
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Description="Generates a very simple business object." %>
+<%@ Property Name="NameSpace" Type="System.String" Default="" Category="Text" Description="Namespace for this class" %>
+
+using System;
+using System.Web;
+
+namespace <%= NameSpace %>.DALFactory
+{
+	/// <summary>
+	/// Summary description for DataCache.
+	/// </summary>
+	public class DataCache
+	{
+		public DataCache()
+		{
+			//
+			// TODO: Add constructor logic here
+			//
+		}
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="CacheKey"></param>
+		/// <returns></returns>
+		public static object GetCache(string CacheKey)
+		{
+
+			System.Web.Caching.Cache objCache = HttpRuntime.Cache;
+			return objCache[CacheKey];
+
+		}
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="CacheKey"></param>
+		/// <param name="objObject"></param>
+		public static void SetCache(string CacheKey, object objObject)
+		{
+			System.Web.Caching.Cache objCache = HttpRuntime.Cache;
+			objCache.Insert(CacheKey, objObject);
+		}
+	}
+}
+
+
+<script runat="template">
+</script>

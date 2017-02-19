@@ -1,0 +1,244 @@
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %>
+<%@ Property Name="NameSpace" Type="System.String" Default="" Category="Text" Description="Namespace for this class" %>
+<%@ Property Name="DBName" Type="System.String" Default="" Category="Text" Description="Database Name" %>
+
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Import Namespace="System.Text" %>
+using System;
+using System.Data;
+using <%= NameSpace %>.Model;
+using <%= NameSpace %>.IDAL;
+using <%= NameSpace %>.DALFactory;
+
+namespace <%= NameSpace %>.BLL
+{
+    /// <summary>
+    /// BLL Layer For <%= SourceTable %>.
+    /// </summary>
+    public class <%= GetClassName(SourceTable) %>
+    {
+		#region Constructor
+		/// <summary>
+		/// Default constructor
+		/// </summary>
+		public <%= GetClassName(SourceTable) %>()
+		{
+		}
+		#endregion
+
+        #region Interfaces
+		
+		/// <summary>
+		/// Insert a new <%= GetLowerCaseName(SourceTable.Name)%> record to database.
+		/// </summary>
+		/// <param name="<%=GetModuleInstanceName(SourceTable)%>"></param>
+		/// <returns></returns>
+		public int Insert(<%= GetClassName(SourceTable) %>Info <%=GetModuleInstanceName(SourceTable)%>)
+		{
+			// Validate input
+			if (<%=GetModuleInstanceName(SourceTable)%> == null)
+				return 0;
+
+			// Insert an instance of the <%= GetClassName(SourceTable) %> DAL using the DALFactory
+			I<%= GetClassName(SourceTable) %> dal = DALFactory.<%= GetClassName(SourceTable) %>.Create();
+
+			// Use the dal to insert a new record 
+			return dal.Insert(<%=GetModuleInstanceName(SourceTable)%>);
+		}
+
+        /// <summary>
+		/// Gets a <%= GetLowerCaseName(SourceTable.Name)%> record from the database.
+		/// </summary>
+		/// <param name="<%= GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) %>"></param>
+		/// <returns></returns>
+		public <%= GetClassName(SourceTable) %>Info Get(<%=GetPrimaryKeyCSharpType() %> <%= GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) %>)
+		{
+			// Validate input
+			<%= GetValidateInputString() %>
+				return null;
+
+			// Get an instance of the <%= GetClassName(SourceTable) %> DAL using the DALFactory
+			I<%= GetClassName(SourceTable) %> dal = DALFactory.<%= GetClassName(SourceTable) %>.Create();
+
+			// Use the dal to get a record 
+			return dal.Get(<%= GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) %>);
+		}
+		
+		/// <summary>
+		/// Gets all <%= GetLowerCaseName(SourceTable.Name)%> records from the database.
+		/// </summary>
+		/// <returns></returns>
+		public DataSet GetAll()
+		{
+			// Get an instance of the <%= GetClassName(SourceTable) %> DAL using the DALFactory
+			I<%= GetClassName(SourceTable) %> dal = DALFactory.<%= GetClassName(SourceTable) %>.Create();
+
+			// Use the dal to get all records 
+			return dal.GetAll();
+		}
+			
+		/// <summary>
+		/// Update a <%= GetLowerCaseName(SourceTable.Name)%> record from the database.
+		/// </summary>
+		/// <param name="<%=GetModuleInstanceName(SourceTable)%>"></param>
+		public void Update(<%= GetClassName(SourceTable) %>Info <%=GetModuleInstanceName(SourceTable)%>)
+		{
+            // Validate input
+			if (<%=GetModuleInstanceName(SourceTable)%>==null)
+				return;
+
+			// Get an instance of the <%= GetClassName(SourceTable) %> DAL using the DALFactory
+			I<%= GetClassName(SourceTable) %> dal = DALFactory.<%= GetClassName(SourceTable) %>.Create();
+
+			// Use the dal to update a new record 
+			dal.Update(<%=GetModuleInstanceName(SourceTable)%>);
+		}
+		
+		
+		/// <summary>
+		/// Delete a <%= GetLowerCaseName(SourceTable.Name)%> record from the database.
+		/// </summary>
+	    /// <param name="<%= GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) %>">The primary key value</param>
+		/// <returns></returns>
+		public int Delete(<%= GetPrimaryKeyCSharpType() %> <%= GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) %>)
+		{
+			// Validate input
+			<%= GetValidateInputString() %>
+				return 0;
+
+			// Get an instance of the <%= GetClassName(SourceTable) %> DAL using the DALFactory
+			I<%= GetClassName(SourceTable) %> dal = DALFactory.<%= GetClassName(SourceTable) %>.Create();
+
+			// Use the dal to delete a new record 
+			return dal.Delete(<%= GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) %>);
+		}
+
+        #endregion
+		
+		#region StaticMethods
+		
+		#endregion
+    }
+}
+
+<script runat="template">
+
+    public string GetCamelCaseName(string value)
+    {
+        return value.Substring(0, 1).ToLower() + value.Substring(1);
+    }
+
+    public string ConvertFirstCharToUpper(string value)
+    {
+        return value.Substring(0, 1).ToUpper() + value.Substring(1);
+    }
+
+    public string GetClassName(TableSchema table)
+    {
+        /*
+        if (table.Name.EndsWith("s"))
+        {
+            return table.Name.Substring(0, table.Name.Length - 1);
+        }
+        else
+        {
+            return table.Name;
+        }
+		*/
+		if(table==null)
+		{
+		    return null;
+		}
+		return table.Name;
+    }
+
+	public string GetLowerCaseName(string value)
+    {
+	    return value.ToLower();
+    }
+	
+	public string GetModuleInstanceName(TableSchema table)
+	{
+		return "o"+table.Name+"Info";
+	}
+	
+	public string GetCSharpVariableType(ColumnSchema column)
+    {
+		if (column.Name.EndsWith("TypeCode")) return column.Name;
+		
+		switch (column.DataType)
+		{
+			case DbType.AnsiString: return "string";
+			case DbType.AnsiStringFixedLength: return "string";
+			case DbType.Binary: return "byte[]";
+			case DbType.Boolean: return "bool";
+			case DbType.Byte: return "byte";
+			case DbType.Currency: return "decimal";
+			case DbType.Date: return "DateTime";
+			case DbType.DateTime: return "DateTime";
+			case DbType.Decimal: return "decimal";
+			case DbType.Double: return "double";
+			case DbType.Guid: return "Guid";
+			case DbType.Int16: return "short";
+			case DbType.Int32: return "int";
+			case DbType.Int64: return "long";
+			case DbType.Object: return "object";
+			case DbType.SByte: return "sbyte";
+			case DbType.Single: return "float";
+			case DbType.String: return "string";
+			case DbType.StringFixedLength: return "string";
+			case DbType.Time: return "TimeSpan";
+			case DbType.UInt16: return "ushort";
+			case DbType.UInt32: return "uint";
+			case DbType.UInt64: return "ulong";
+			case DbType.VarNumeric: return "decimal";
+			default:
+			{
+				return "__UNKNOWN__" + column.NativeType;
+			}
+		}
+	}
+	public string GetPrimaryKeyCSharpType()
+	{
+		return GetCSharpVariableType(SourceTable.PrimaryKey.MemberColumns[0]);
+	}
+	public string GetValidateInputString()
+	{
+		DbType dbtype = SourceTable.PrimaryKey.MemberColumns[0].DataType;
+		string result = String.Empty;
+		switch(dbtype)
+		{
+			case DbType.Byte:
+			case DbType.Currency:
+			case DbType.Decimal:
+			case DbType.Int16:
+			case DbType.Int32:
+			case DbType.Int64:
+			    result = "if(" + GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) + "<0)";
+			    break;
+			case DbType.AnsiStringFixedLength:
+			case DbType.AnsiString:
+			case DbType.String:
+			case DbType.StringFixedLength:
+			case DbType.Binary:
+			    result = "if(" + GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) + ".Length==0)";
+			    break;
+			break;
+			case DbType.Guid:
+			    result = "if(" + GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) + "==null)";
+			    break;
+			case DbType.DateTime:
+			case DbType.Date:
+			    result = "if(" + GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) + "==null)";
+			    break;
+			default:
+		        result = "if(" + GetCamelCaseName(SourceTable.PrimaryKey.MemberColumns[0].Name) + "==null)";
+			    break;
+		}
+		return result;
+	}
+</script>

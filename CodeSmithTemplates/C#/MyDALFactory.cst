@@ -1,0 +1,86 @@
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Description="Generates a very simple business object." %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the object is based on." %>
+<%@ Property Name="NameSpace" Type="System.String" Default="" Category="Text" Description="Namespace for this class" %>
+<%@ Property Name="Path" Type="System.String" Default="DAL" Category="Text" Description="SQLServerDAL Path." %>
+<%@ Property Name="DBName" Type="System.String" Default="" Category="Text" Description="Database Name" %>
+<%@ Property Name="Cache" Type="System.Boolean" Default="true" Category="Cache" Description="User Cache or not" %>
+
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Import Namespace="System.Text" %>
+using System;
+using System.Reflection;
+using <%= NameSpace %>.IDAL;
+
+namespace <%= NameSpace %>.DALFactory
+{
+    /// <summary>
+    /// DAL Factory Layer For <%= SourceTable %>.
+    /// </summary>
+    public class <%= GetClassName(SourceTable) %>
+    {
+		private static readonly string path = System.Configuration.ConfigurationSettings.AppSettings["<%= Path %>"]; 
+		
+		<% if(Cache){ %>
+		private static object CreateObject(string path,string CacheKey)
+		{			
+			object objType = DataCache.GetCache(CacheKey);
+			if (objType == null)
+			{
+				try
+				{
+					objType = Assembly.Load(path).CreateInstance(CacheKey);					
+					DataCache.SetCache(CacheKey, objType);
+				}
+				catch{}
+
+			}
+			return objType;
+		}
+		
+		public static I<%= GetClassName(SourceTable) %> Create()
+		{		
+			//return (I<%= GetClassName(SourceTable) %>)Assembly.Load(path).CreateInstance(path+".<%= GetClassName(SourceTable) %>");
+		
+			string CacheKey = path+".<%= GetClassName(SourceTable) %>";	
+			object objType=CreateObject(path,CacheKey);			
+			return (I<%= GetClassName(SourceTable) %>)objType;		
+		}
+		<% 
+		} 
+		else{%>
+		
+		public static I<%= GetClassName(SourceTable) %> Create()
+		{			
+			return (I<%= GetClassName(SourceTable) %>)Assembly.Load(path).CreateInstance(path+".<%= GetClassName(SourceTable) %>");		
+		}
+		<% 
+		}
+		%>
+		
+    }
+}
+
+<script runat="template">
+    public string GetClassName(TableSchema table)
+    {
+        /*
+        if (table.Name.EndsWith("s"))
+        {
+            return table.Name.Substring(0, table.Name.Length - 1);
+        }
+        else
+        {
+            return table.Name;
+        }
+		*/
+		if(table==null)
+		{
+		    return null;
+		}
+		return table.Name;
+    }
+
+</script>

@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<codeSmith xmlns="http://www.codesmithtools.com/schema/csp.xsd">
+  <variables>
+    <add key="ConnectionString" value="Data Source=CDPHOME\SQL08;Initial Catalog=UserBase;Integrated Security=True" />
+    <add key="Provider" value="SchemaExplorer.SqlSchemaProvider,SchemaExplorer.SqlSchemaProvider" />
+    <add key="AssemblyName" value="UserBase.Data" />
+    <add key="DataContextName" value="UserBaseDataContext" />
+    <add key="BaseNamespace" value="UserBase.Data" />
+    <add key="MapsDirectory" value="Maps" />
+  </variables>
+  <propertySets>
+    <propertySet name="Hbms" template="..\Templates\CSharp\Hbms.cst">
+      <property name="AssemblyName">$(AssemblyName)</property>
+      <property name="SourceDatabase">
+        <connectionString>$(ConnectionString)</connectionString>
+        <providerType>$(Provider)</providerType>
+      </property>
+      <property name="IgnoreList">
+        <stringList>
+          <string>sysdiagrams$</string>
+          <string>^dbo.aspnet</string>
+          <string>^dbo.vw_aspnet</string>
+        </stringList>
+      </property>
+      <property name="CleanExpression">
+        <stringList>
+          <string>^(sp|tbl|udf|vw)_</string>
+          <string>^\\w+_</string>
+        </stringList>
+      </property>
+      <property name="IncludeFunctions">True</property>
+      <property name="IncludeViews">True</property>
+      <property name="MapsDirectory">$(MapsDirectory)</property>
+      <property name="EntityNamespace">$(AssemblyName)</property>
+    </propertySet>
+    <propertySet name="Entities" template="..\Templates\CSharp\Entities.cst">
+      <property name="AssemblyName">$(AssemblyName)</property>
+      <property name="SourceDatabase">
+        <connectionString>$(ConnectionString)</connectionString>
+        <providerType>$(Provider)</providerType>
+      </property>
+      <property name="MapsDirectory">$(MapsDirectory)</property>
+      <property name="EntitiesDirectory">Entities</property>
+      <property name="ModelsDirectory">Models</property>
+      <property name="GenerateDataContext">True</property>
+      <property name="EntityBaseClass">EntityBase</property>
+      <property name="BaseNamespace">$(AssemblyName)</property>
+      <property name="DataContextName">$(DataContextName)</property>
+    </propertySet>
+    <propertySet name="Queries" template="..\Templates\CSharp\Queries.cst">
+      <property name="SourceDatabase">
+        <connectionString>$(ConnectionString)</connectionString>
+        <providerType>$(Provider)</providerType>
+      </property>
+      <property name="MapsDirectory">$(MapsDirectory)</property>
+      <property name="QueriesDirectory">Queries</property>
+      <property name="MethodPrefix">By</property>
+      <property name="UniqueMethodPrefix">GetBy</property>
+      <property name="MethodKeySuffix">Key</property>
+      <property name="DataContextName">$(DataContextName)</property>
+      <property name="BaseNamespace">$(AssemblyName)</property>
+    </propertySet>
+  </propertySets>
+</codeSmith>

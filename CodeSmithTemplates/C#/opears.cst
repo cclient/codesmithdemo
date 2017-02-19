@@ -1,0 +1,64 @@
+﻿<%-- 
+Name:DAL
+Author:崔大鹏
+Description: 生成批量更新DAL
+--%>
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Debug="False" Description="生成DAL类." ResponseEncoding="utf-8"%>
+<%@ Assembly Name="System.Data" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="mscorlib" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Text"%>
+<%@ Map Name="CSharpAlias" Src="System-CSharpAlias" Description="" %>
+<%@ Property Name="SourceTables" Type="SchemaExplorer.TableSchemaCollection" Category="参数" Description="表名称" %>
+<%@ Register Name="Extern" Template="StringProcess.cst" %>
+
+
+<% 
+foreach (TableSchema table in SourceTables) 
+{ 
+   OutputSubTemplate(table); 
+} 
+%>
+<script runat="template"> 
+private CodeTemplate _mySubTemplate; 
+
+[Browsable(false)]
+public CodeTemplate MySubTemplate 
+{ 
+   get 
+   { 
+      if (_mySubTemplate == null) 
+      { 
+         CodeTemplateCompiler compiler = new CodeTemplateCompiler(this.CodeTemplateInfo.DirectoryName + "opear.cst"); 
+         compiler.Compile(); 
+         
+         if (compiler.Errors.Count == 0) 
+         { 
+            _mySubTemplate = compiler.CreateInstance(); 
+         } 
+         else 
+         { 
+            for (int i = 0; i < compiler.Errors.Count; i++) 
+            {
+               Response.WriteLine(compiler.Errors[ i].ToString()); 
+            } 
+         } 
+      } 
+      
+      return _mySubTemplate; 
+   } 
+} 
+
+public void OutputSubTemplate(TableSchema table) 
+{ 
+   MySubTemplate.SetProperty("SourceTable", table); 
+   MySubTemplate.SetProperty("IncludeDrop", false); 
+   MySubTemplate.SetProperty("InsertPrefix", "Insert"); 
+//打印到界面
+//MySubTemplate.Render(Response); 
+    string path="C:\\opera\\"+Extern.StringProcess.GetClassName(table.Name)+"NewDAL.cs";
+   MySubTemplate.RenderToFile(path,true);
+} 
+</script>       

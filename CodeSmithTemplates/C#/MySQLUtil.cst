@@ -1,0 +1,580 @@
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Description="Template for SQL Utility" %>
+<%@ Property Name="NameSpace" Type="String" Category="Context" Default="Demo" Description="The namespace to use for this class" %>
+<%@ Property Name="ClassName" Type="String" Category="Context" Default="SQLUtil" Description="The name for this class" %>
+<%@ Property Name="Timeout" Type="Int32" Category="Database" Default="36000" Description="The name for this class" %>
+<%@ Assembly Name="CodeSmith.CustomProperties" %> 
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="System.Data" %>
+using System;
+using System.Xml;
+using System.Data;
+using System.Data.SqlClient;
+
+namespace <%= NameSpace %>.SQLServerDAL
+{
+	/// <summary>
+	/// Summary description for SQLUtil.
+	/// </summary>
+	public class <%= ClassName %>
+	{
+		
+		#region Class Declarations
+        <%for(int i=0;i<DBList.Count;i++)
+		{
+		%> 
+		private string <%= GetCamelCaseName(DBList[i]) %>ConnString = System.Configuration.ConfigurationSettings.AppSettings["<%= DBList[i] %>ConnString"];
+		<%
+		} 
+		%>
+
+		SqlConnection conn;
+		SqlCommand cmd;
+		private bool m_bTrapError = true;
+		#endregion
+		
+		#region DatabaseType enum
+		public enum DatabaseType
+		{
+			<% for(int i=0;i<DBList.Count;i++)
+			{
+			%>
+			<%= DBList[i] %> = <%= i %><% if(i!=DBList.Count-1){%>,<%} %>
+			<%
+			}
+			%>
+		}
+		#endregion
+
+		#region ParameterType
+		//this will need to be updated with additional parameter types.
+		public enum ParameterType
+		{
+			Integer = 1,
+			Varchar = 2,
+			Money = 3,
+			Bit = 4,
+			Char = 5,
+			Decimal = 6,
+			SmallDateTime = 7
+		}
+		
+		public SqlDbType GetParameterType(ParameterType enumParamType)
+		{
+			switch(enumParamType)
+			{
+				case ParameterType.Integer:
+					return SqlDbType.Int;
+				case ParameterType.Varchar:
+					return SqlDbType.VarChar;
+				case ParameterType.Money:
+					return SqlDbType.Money;
+				case ParameterType.Bit:
+					return SqlDbType.Bit;
+				case ParameterType.Char:
+					return SqlDbType.Char;
+				case ParameterType.Decimal:
+					return SqlDbType.Decimal;
+				case ParameterType.SmallDateTime:
+					return SqlDbType.SmallDateTime;
+				default:
+					return SqlDbType.Int;
+			}
+		}
+
+		#endregion
+	
+		#region Constructor
+		public SQLUtil()
+		{
+			cmd = new SqlCommand();
+			cmd.CommandTimeout = <%= Timeout %>;
+		}
+		#endregion
+
+		#region TrapError
+		public bool TrapError {get{return m_bTrapError;}set{m_bTrapError=value;}}
+		#endregion
+		
+		#region GetConnection
+		private SqlConnection GetConnection(DatabaseType db)
+		{
+			if (conn == null)
+			{
+				conn = new SqlConnection();
+				<% for(int i=0;i<DBList.Count;i++)
+				{
+				%>
+				<% if(i==0)
+				{
+				%>
+				if (db == DatabaseType.<%= DBList[i] %>)
+				{
+					conn.ConnectionString = <%= GetCamelCaseName(DBList[i]) %>ConnString;
+				}
+				<%
+				} 
+				else
+				{%> 
+				else if (db == DatabaseType.<%= DBList[i] %>)
+				{
+					conn.ConnectionString = <%= GetCamelCaseName(DBList[i]) %>ConnString;
+				}
+				<%
+				}
+				}
+				%>
+
+				try
+				{
+					conn.Open();
+				}
+				catch(Exception er)
+				{
+					//ErrorMessages.SendErrorAlert(er.Message);
+					throw er;
+				}
+			}
+			return conn;
+		}
+		#endregion
+		
+		#region AddParameter
+		public void AddParameter(string paramName, double val)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.Decimal;
+			param.Precision=18;
+			param.Scale=4;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+
+		public void AddParameter(string paramName, double val,int precision,int scale)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.Decimal;
+			param.Precision= Convert.ToByte(precision);
+			param.Scale= Convert.ToByte(scale);
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+		public void AddParameter(string paramName, decimal val)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.Decimal;
+			param.Precision=18;
+			param.Scale=4;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+
+		public void AddTextParameter(string paramName, string val)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.Text;
+			param.Size = val.Length;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+		public void AddParameter(string paramName, DateTime _val)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.DateTime;
+			param.Value = _val;
+
+			cmd.Parameters.Add(param);
+		}
+		public void AddParameter(string paramName, DateTime _val, bool isSmallDateTime)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.SmallDateTime;
+			param.Value = _val;
+
+			cmd.Parameters.Add(param);
+		}
+		public void AddParameter(string paramName, string val, int size)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.VarChar;
+			param.Size = size;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+
+		public void AddParameter(string paramName, int val)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.Int;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+		public void AddParameter(string paramName, long val)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.BigInt;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}		
+		public void AddParameter(string paramName, bool val)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.TinyInt;
+			param.Value = val ? 1 : 0;
+
+			cmd.Parameters.Add(param);
+		}
+		public void AddParameter(string paramName, string val, int size, bool isChar)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.Char;
+			param.Size = size;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+
+		//public void AddParameter(string paramName, decimal val, int size, byte precision)
+		public void AddParameter(string paramName, decimal val, byte precision, byte scale)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.Decimal;
+			//param.Size = size;
+			//param.Precision = precision;
+			param.Precision = precision;
+			param.Scale = scale;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+		public void AddParameter(string paramName, double val, bool isMoney)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			if (isMoney)
+			{
+				param.SqlDbType = SqlDbType.Money;
+			}
+			else
+			{
+				param.SqlDbType =SqlDbType.SmallMoney;
+			}
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+
+		public void AddParameter(string paramName, Guid val)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.UniqueIdentifier;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+
+		public void AddCharParameter(string paramName, string val, int size, bool isChar)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Input;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.Char;
+			param.Size = size;
+			param.Value = val;
+
+			cmd.Parameters.Add(param);
+		}
+		#endregion
+
+		#region ClearParameters
+		public void ClearParameters()
+		{
+			cmd.Parameters.Clear();
+		}
+		#endregion
+
+		#region AddOutputParameter
+		public void AddOutputParameter(string paramName)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Output;
+			param.ParameterName = paramName;
+			param.SqlDbType = SqlDbType.VarChar;
+			param.Size = 100;
+			
+			cmd.Parameters.Add(param);
+		}
+		public void AddOutputParameter(string paramName, ParameterType enumParamType, int size)
+		{
+			SqlParameter param = new SqlParameter();
+			param.Direction = ParameterDirection.Output;
+			param.ParameterName = paramName;
+			param.SqlDbType = GetParameterType(enumParamType);
+			if (size>0) {param.Size = size;}
+			
+			cmd.Parameters.Add(param);
+		}
+		#endregion
+
+		#region GetParameterValue
+		public string GetParameterValue(string paramName)
+		{
+			if(cmd.Parameters[paramName] != null)
+				return cmd.Parameters[paramName].Value.ToString();
+			else
+				return "";
+		}
+		#endregion
+
+		#region Close
+		public void Close()
+		{
+			if(cmd.Connection.State!=System.Data.ConnectionState.Closed) cmd.Connection.Close();
+		}
+		#endregion
+
+		#region ExecuteReader
+		public XmlReader ExecuteReader(string storedProc, DatabaseType enumDBType)
+		{
+			cmd.Connection = GetConnection(enumDBType);
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = storedProc;
+			
+			try
+			{
+				return cmd.ExecuteXmlReader();
+			}
+			catch (Exception er)
+			{
+				throw er;
+			}
+			finally
+			{
+				cmd.Dispose();
+				conn.Dispose();
+			}
+		}
+		#endregion
+		
+		#region ExecuteDataReader
+		public SqlDataReader ExecuteDataReader(string storedProc, DatabaseType enumDBType)
+		{
+			cmd.Connection = GetConnection(enumDBType);
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = storedProc;
+			
+			try
+			{
+				return cmd.ExecuteReader(CommandBehavior.CloseConnection);
+			}
+			catch (Exception er)
+			{
+				cmd.Dispose();
+				conn.Dispose();
+				throw er;
+			}
+		}
+		#endregion
+
+		#region ExecuteScalar
+		public object ExecuteScalar(string storedProc, DatabaseType enumDBType)
+		{
+			cmd.Connection = GetConnection(enumDBType);
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = storedProc;
+			
+			try
+			{
+				return cmd.ExecuteScalar();
+			}
+			catch (Exception er)
+			{
+				throw er;
+			}
+			finally
+			{
+				cmd.Dispose();
+				conn.Dispose();
+			}
+		}
+		#endregion
+
+		#region ExecuteNonQuery
+		public int ExecuteNonQuery(string storedProc, DatabaseType enumDBType)
+		{
+			cmd.Connection = GetConnection(enumDBType);
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = storedProc;
+			
+			try
+			{
+				return cmd.ExecuteNonQuery();
+			}
+			catch(Exception er)
+			{
+				throw er;
+			}
+			finally
+			{
+				cmd.Dispose();
+				conn.Dispose();
+			}
+		}
+		#endregion
+
+		#region ExecuteDataSet
+		public DataSet ExecuteDataSet(string storedProc, DatabaseType enumDBType)
+		{
+			cmd.Connection = GetConnection(enumDBType);
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = storedProc;
+			SqlDataAdapter daGetData = new SqlDataAdapter(cmd);
+			DataSet dsReturnData = new DataSet();
+
+	
+			try
+			{
+				daGetData.Fill(dsReturnData);
+				return dsReturnData;
+			}
+			catch (Exception er)
+			{
+				throw er;
+			}
+			finally
+			{
+				cmd.Dispose();
+				conn.Dispose();
+			}
+
+
+		}
+		#endregion
+
+		#region ExecuteScalarWithReturn
+		public string ExecuteScalarWithReturn(string storedProc, string paramName, DatabaseType enumDBType)
+		{
+			cmd.Connection = GetConnection(enumDBType);
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = storedProc;
+
+			
+			try
+			{
+				cmd.ExecuteScalar();
+				return GetParameterValue(paramName);
+			}
+			catch (Exception er)
+			{
+				throw er;
+			}
+			finally
+			{
+				cmd.Dispose();
+				conn.Dispose();
+			}
+		}
+		#endregion
+	}
+}
+
+<script runat="template">
+
+    #region DBList
+    private CodeSmith.CustomProperties.StringCollection _DBList = 
+	  new CodeSmith.CustomProperties.StringCollection(new string[]{"DefaultDB"});
+
+    [CodeTemplateProperty(CodeTemplatePropertyOption.Required)]
+	[Category("Database")]
+	[Description("Database List")]
+	public CodeSmith.CustomProperties.StringCollection DBList
+	{ 
+		get
+		{
+			if(_DBList==null || _DBList.Count<=0 || _DBList[0].Length==0)
+			    return null;
+			return _DBList;
+		}
+		set
+		{
+			if(value==null || value.Count<=0)
+			{
+			    _DBList = null;
+			}
+			else
+			{
+			    _DBList = value;
+			}
+		} 
+	}
+	#endregion
+
+	#region ConnStringList
+	/*
+    private CodeSmith.CustomProperties.StringCollection _ConnStringList = null;
+
+    [CodeTemplateProperty(CodeTemplatePropertyOption.Required)]
+	[Category("Database")]
+	[Description("ConnString List")]
+	public CodeSmith.CustomProperties.StringCollection ConnStringList
+	{ 
+		get
+		{
+			if(_ConnStringList==null || _ConnStringList.Count<=0)
+			    return null;
+			return _ConnStringList;
+		}
+		set
+		{
+			if(value==null || value.Count<=0)
+			{
+			    _ConnStringList = null;
+			}
+			else
+			{
+			    _ConnStringList = value;
+			}
+		} 
+	}
+	*/
+	#endregion
+	
+	public string GetCamelCaseName(string value)
+    {
+	    return value.Substring(0, 1).ToLower() + value.Substring(1);
+    }
+
+</script>

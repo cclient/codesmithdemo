@@ -1,0 +1,197 @@
+﻿<%-- 
+Name:DAL
+Author:黄鼎
+Description: 生成数据层DAL
+--%>
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Debug="False" Description="生成DAL类." ResponseEncoding="utf-8"%>
+<%@ Assembly Name="System.Data" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="mscorlib" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Text"%>
+<%@ Map Name="CSharpAlias" Src="System-CSharpAlias" Description="" %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="参数" Description="表名称"  %>
+<%@ Register Name="Extern" Template="StringProcess.cst" %>
+
+<%
+    string _dbName=StringUtil.ToPascalCase(SourceTable.Database.Name);
+    string _clsName=Extern.StringProcess.GetClassName(SourceTable.Name);
+      string _sourceTableName=SourceTable.Name;
+%>
+<script runat="template">
+    public string GetColNameForUpdate(TableSchema table){
+        StringBuilder sb=new StringBuilder();        
+        foreach(ColumnSchema col in table.NonPrimaryKeyColumns){           
+                sb.AppendFormat("{0}=@{1},",col.Name,StringUtil.ToCamelCase(col.Name));
+        }
+        if(sb[sb.Length-1]==',') sb.Remove(sb.Length-1,1);
+        return sb.ToString();
+    }
+    
+    public string GetColNameForInsert(TableSchema table){
+         StringBuilder sb=new StringBuilder();
+        sb.Append("(");
+        foreach(ColumnSchema col in table.NonPrimaryKeyColumns){           
+            sb.AppendFormat("{0},",col.Name);
+        }
+        if(sb[sb.Length-1]==',') sb.Remove(sb.Length-1,1);
+        sb.Append(") VALUES (");
+        foreach(ColumnSchema col in table.NonPrimaryKeyColumns){           
+            sb.AppendFormat("@{0},",StringUtil.ToCamelCase(col.Name));
+        }        
+        if(sb[sb.Length-1]==',') sb.Remove(sb.Length-1,1);        
+        sb.Append(")");
+        
+        return sb.ToString();
+    }
+</script>
+using System.Configuration;
+using System.Web;
+using System.Web.Security;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Web.UI.WebControls.WebParts;
+using System.Web.UI.HtmlControls;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Sql;
+using System.Data.SqlClient;
+using <%=_dbName%>.Models;
+
+namespace <%=_dbName%>.DAL
+{
+    /// <summary>
+    /// SysFunService 类
+    /// </summary>
+    public class <%=_clsName%>Service
+    {                
+        #region 查询 
+        <% if(SourceTable.ForeignKeyColumns.Count==0){ %>            
+            <% foreach(ColumnSchema col in SourceTable.Columns){ %>
+                <% if(!col.IsPrimaryKeyMember){ %>
+                    public static IList<<%=_clsName%>> Get<%=_clsName%>By<%=StringUtil.ToPascalCase(col.Name)%>(<%=CSharpAlias[col.SystemType.FullName]%> <%=StringUtil.ToCamelCase(col.Name)%>)
+                    {
+                        string sql = "SELECT * FROM <%=SourceTable.Name%> WHERE <%=col.Name%>=@<%=StringUtil.ToCamelCase(col.Name)%>";
+                        SqlParameter p = new SqlParameter("@<%=StringUtil.ToCamelCase(col.Name)%>", <%=StringUtil.ToCamelCase(col.Name) %>);
+                        DataTable dt=DBHelper.GetDataSet(sql,p);
+                        return GetList(dt);
+                    }
+                <%}else{ %>                
+                     public static <%=_clsName%> Get<%=_clsName%>By<%=StringUtil.ToPascalCase(col.Name)%>(<%=CSharpAlias[col.SystemType.FullName]%> <%=StringUtil.ToCamelCase(col.Name)%>)
+                    {
+                        string sql = "SELECT * FROM <%=SourceTable.Name%> WHERE <%=col.Name%>=@<%=StringUtil.ToCamelCase(col.Name)%>";
+                        SqlParameter p = new SqlParameter("@<%=StringUtil.ToCamelCase(col.Name)%>", <%=StringUtil.ToCamelCase(col.Name) %>);
+                        DataTable dt=DBHelper.GetDataSet(sql,p);
+                        IList<<%=_clsName%>> list=GetList(dt);
+                        if(list.Count>0) return list[0];
+                        return null;
+                    }
+                <%} %>
+            <%} %>
+        <%}else{ %>
+            <% foreach(ColumnSchema col in SourceTable.Columns){ %>
+                <% if(col.IsPrimaryKeyMember){ %>
+                <% 
+                    string argName=StringUtil.ToCamelCase(col.Name); 
+                    string argType=CSharpAlias[col.SystemType.FullName];
+                %>
+                     public static <%=_clsName%> Get<%=_clsName%>By<%=StringUtil.ToPascalCase(col.Name)%>(<%=argType%> <%=argName%>)
+                    {
+                        string sql = "SELECT * FROM <%=_clsName%> WHERE <%=col.Name%> = @<%=argName%>";
+                        SqlParameter p=new SqlParameter("@<%=argName%>",<%=argName%>);
+                        DataTable dt=DBHelper.GetDataSet(sql,p);
+                        IList<<%=_clsName%>> list=GetList(dt);
+                        if(list.Count>0) return list[0];
+                        return null;
+                    }
+                <%} %>
+            <%} %>
+        
+        <%} %>
+        #endregion
+        
+        #region 修改
+        
+        <% foreach(ColumnSchema col in SourceTable.Columns){ %>
+            <% if(col.IsPrimaryKeyMember){ %>
+                public static int Modify<%=_clsName %>(<%=_clsName %> model){
+                    string sql="UPDATE <%=SourceTable.Name %> SET <%=GetColNameForUpdate(SourceTable)%> WHERE <%=col.Name%>=@<%=StringUtil.ToCamelCase(col.Name)%>";
+                    SqlParameter[] para = new SqlParameter[]
+        			{
+                        <% foreach(ColumnSchema c in SourceTable.NonForeignKeyColumns){ %>
+        				    new SqlParameter("@<%=StringUtil.ToCamelCase(c.Name)%>", model.<%=StringUtil.ToPascalCase(c.Name)%>),                            
+                        <%} %>
+                        <% foreach(ColumnSchema c in SourceTable.ForeignKeyColumns){ %>
+        				    new SqlParameter("@<%=StringUtil.ToCamelCase(c.Name) %> ", model.<%=Extern.StringProcess.RemoveStr_Id(c.Name)%>.Id), 
+                        <%} %>    	       
+        			};
+                    return DBHelper.ExecuteCommand(sql, para);
+                }
+            <%} %>
+        <%} %>
+        #endregion
+        
+        #region 删除
+          <% foreach(ColumnSchema c in SourceTable.Columns){ %>
+            <% if(c.IsPrimaryKeyMember){ %>
+                public static int Delete<%=_clsName %>(<%=_clsName %> model){
+                    string sql="DELETE <%=SourceTable.Name %> WHERE <%=c.Name%>=@<%=StringUtil.ToCamelCase(c.Name)%>";
+                    SqlParameter[] para = new SqlParameter[]
+        			{
+        			    new SqlParameter("@<%=StringUtil.ToCamelCase(c.Name)%>", model.<%=StringUtil.ToPascalCase(c.Name)%>)                          
+        			};
+                    return DBHelper.ExecuteCommand(sql, para);
+                }
+            <%} %>
+        <%} %>
+        #endregion
+        
+        #region 新增
+        <% foreach(ColumnSchema c in SourceTable.Columns){ %>
+            <% if(c.IsPrimaryKeyMember){ %>
+                public static <%=_clsName %> Add<%=_clsName %>(<%=_clsName%> model){
+                    string sql="INSERT INTO  <%=SourceTable.Name %> <%=GetColNameForInsert(SourceTable) %>";
+                    SqlParameter[] para = new SqlParameter[]
+        			{
+                        <% foreach(ColumnSchema col in SourceTable.NonForeignKeyColumns){ %>
+                            <% if(!col.IsPrimaryKeyMember){ %>
+        				        new SqlParameter("@<%=StringUtil.ToCamelCase(col.Name)%>", model.<%=StringUtil.ToPascalCase(col.Name)%>),                            
+                            <%} %>
+                        <%} %>                        
+                        <% foreach(ColumnSchema col in SourceTable.ForeignKeyColumns){ %>
+                                new SqlParameter("@<%=StringUtil.ToCamelCase(col.Name) %> ", model.<%=Extern.StringProcess.RemoveStr_Id(col.Name)%>.Id), 
+                        <%} %>                       	       
+        			};
+                    int newId = DBHelper.GetScalar(sql, para);
+                    return Get<%=_clsName%>By<%=c.Name%>(newId);
+                }
+            <%} %>
+        <%} %>
+        #endregion
+        
+        #region 将DataTable转换成<%=_clsName%>集合
+         private static IList<<%=_clsName%>> GetList(DataTable dt)
+        {
+            IList<<%=_clsName%>> list = new List<<%=_clsName%>>();
+            foreach (DataRow row in dt.Rows)
+            {
+                <%=_clsName%> model = new <%=_clsName%>();
+                <% foreach(ColumnSchema col in SourceTable.NonForeignKeyColumns){ %>                   
+                    if (dt.Columns.Contains("<%=col.Name%>"))
+                        model.<%=col.Name%>= (<%=CSharpAlias[col.SystemType.FullName]%>)row["<%=col.Name%>"];
+                <%} %>
+                <% foreach(ColumnSchema col in SourceTable.ForeignKeyColumns){ %>
+                    if (dt.Columns.Contains("<%=col.Name%>"))  //外键处理
+                    <% string proName=Extern.StringProcess.RemoveStr_Id(col.Name); %>                      
+                        model.<%=proName%> = <%=proName%>Service.Get<%=proName%>ById((<%=CSharpAlias[col.SystemType.FullName]%>)row["<%=col.Name%>"]);
+                <%} %>
+              
+                list.Add(model);
+            }
+            return list;
+        }
+        #endregion
+      
+    }
+}

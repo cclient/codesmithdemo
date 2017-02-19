@@ -1,0 +1,501 @@
+﻿<%-- 
+Name:DAL
+Author:崔大鹏
+Description: 生成批量更新DAL
+--%>
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Debug="False" Description="生成Model类." ResponseEncoding="utf-8"%>
+<%@ Assembly Name="System.Data" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Register Name="Extern" Template="StringProcess.cst"  %>
+<%@ Map Name="CSharpAlias" Src="System-CSharpAlias" Description="" %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="参数" Description="表名称" %>
+<%
+    string _dbName=StringUtil.ToPascalCase(SourceTable.Database.Name);
+    string _className=Extern.StringProcess.GetClassName(SourceTable.Name);
+    string _sourceTableName=SourceTable.Name;
+%>
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using ent.BoxOffice.NewModel;
+using System.Data.SqlClient;
+using System.Data;
+using MongoDB.Driver;
+using ent.Config;
+using System.Data.Common;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using MongoDB.Bson;
+using MongoDB.Driver.Builders;
+using MongoDB.Driver.Linq;
+
+<%--namespace <%=_dbName%>.Models{--%>
+namespace ent.BoxOffice.SQLDAL{
+
+    /// <summary>
+    /// <%=SourceTable.Description%>(<%=_sourceTableName%>)批量更新类（SQL验证）  Author:崔大鹏
+    /// </summary>
+    public class <%=_className%>SqlOpera: IDataOpear<<%=_sourceTableName%>Info>,ISqlNeed<<%=_sourceTableName%>Info>
+    {
+     public <%=_className%>SqlOpera ()
+        {
+        }
+
+        public <%=_className%>SqlOpera(string tablename)
+        {
+            this.tablename = tablename;
+        }
+      protected string tablename;
+        protected string conString = ConfigSetting.BoxofficeConnectionString;
+      protected SqlCommand myCommand;
+      
+        /// <summary>
+        /// 初始化SQLCOMMAND并绑定事务级别
+        /// </summary>
+        /// <param name="myConnection"></param>
+        public void CreateSqlCommandByTrans(SqlConnection myConnection, SqlTransaction myTrans)
+        {
+            myCommand = new SqlCommand();
+            myCommand.Connection = myConnection;
+            myCommand.Transaction = myTrans;
+        }
+         /// <summary>
+        /// 筛选要插入的数据name
+        /// </summary>
+        /// <returns></returns>
+        public List<<%=_sourceTableName%>Info> CheckNames(List<<%=_sourceTableName%>Info> willinsert, SqlCommand sqlcommod)
+        {
+            sqlcommod.CommandText = GetHasSqlWhere(willinsert);
+            SqlDataAdapter adapter = new SqlDataAdapter(sqlcommod);
+            DataSet ds = new DataSet();
+            adapter.Fill(ds);
+            var mongohas = DataTableToList(ds.Tables[0]);
+            var hasnames = mongohas.Select(p => p.Name).ToList();
+            var willinset = willinsert.Where(p => !hasnames.Contains(p.Name)).ToList();
+            return willinset;
+        }
+
+        public string GetHasSqlWhere(List<<%=_sourceTableName%>Info> willinsert)
+        {
+            var listnames = willinsert.Select(p => "Name='" + p.Name + "'").ToList();
+            string wheresql = string.Join(" or ", listnames);
+            return "select Id,Name,State from " + tablename + " where " + wheresql + "";
+        }
+        
+        /// <summary>
+        /// 筛选要插入的数据 及要更新的
+        /// </summary>
+        /// <returns></returns>
+        public List<<%=_sourceTableName%>Info> CheckNames(List<<%=_sourceTableName%>Info> willinsert, SqlCommand sqlcommod, ref  List<<%=_sourceTableName%>Info> willupdate)
+        {
+            sqlcommod.CommandText = GetHasSqlWhere(willinsert);
+            SqlDataAdapter adapter = new SqlDataAdapter(sqlcommod);
+            DataSet ds = new DataSet();
+            adapter.Fill(ds);
+            willupdate = DataTableToList(ds.Tables[0]);
+            var hasnames = willupdate.Select(p => p.Name).ToList();
+            var willinset = willinsert.Where(p => !hasnames.Contains(p.Name)).ToList();
+            return willinset;
+        }
+        /// <summary>
+        /// SQL批量插入数据
+        /// </summary>
+        /// <param name="willinsert"></param>
+        /// <param name="myConnection"></param>
+        /// <param name="myTrans"></param>
+        public void InsertSqlBulk(List<<%=_sourceTableName%>Info> willinsert, SqlConnection myConnection, SqlTransaction myTrans)
+        {
+            DataTable willinsertTable = willinsert.ToDataTable();
+            //SqlBulk批量插入表。在这里居然不能锁表，上面先把表锁住
+            using (SqlBulkCopy bulkCopy = new SqlBulkCopy(myConnection, SqlBulkCopyOptions.Default, myTrans))
+            {
+                bulkCopy.DestinationTableName = tablename;
+                  <% foreach(ColumnSchema col in SourceTable.NonForeignKeyColumns){ %>        
+                    bulkCopy.ColumnMappings.Add("<%=col.Name%>", "<%=col.Name%>");
+                <%} %>
+
+                bulkCopy.WriteToServer(willinsertTable);
+            }
+        }
+
+        /// <summary>
+        /// SQL批量更新数据
+        /// </summary>
+        /// <param name="willupdate"></param>
+        /// <param name="oldcinemas"></param>
+        /// <returns></returns>
+        public int UpdateSqlBulk(List<<%=_sourceTableName%>Info> willupdate, List<<%=_sourceTableName%>Info> oldcinemas)
+        {
+            StringBuilder sb = new StringBuilder();
+            //从原始数据中找到要更新的键值。给MONGODB的数据。
+            //string updatesql=" UPDATE [Test].[dbo].[cinema] SET [name] = '123' where id=1;";
+            //批量更新数据 在SQL完成后，再更新MONGO
+            //MONGO里已有的ID 定入OLD.并拼SQL更新 执行完后oldlist的ID为库里ID。
+            foreach (var item in willupdate)
+            {
+                //一定不为空
+                var old = oldcinemas.Where(p => p.Name == item.Name).SingleOrDefault();
+                //设置要更新的字段。比如
+                //update hp_time set type=@type where code=@code
+                old.Id = item.Id;
+                sb.Append(" UPDATE [MongoDBTest].[dbo].[" + tablename + "] SET [State] = '" + old.State + "' where Id=" + old.Id + ";");
+            }
+            //更新sqldb
+            myCommand.CommandText = sb.ToString();
+            return myCommand.ExecuteNonQuery();
+        }
+   /// <summary>
+        /// 获得数据列表
+        /// </summary>
+        public static List<<%=_sourceTableName%>Info> DataTableToList(DataTable dt)
+        {
+            List<<%=_sourceTableName%>Info> modelList = new List<<%=_sourceTableName%>Info>();
+            int rowsCount = dt.Rows.Count;
+            if (rowsCount > 0)
+            {
+                <%=_sourceTableName%>Info model;
+                for (int n = 0; n < rowsCount; n++)
+                {
+                    model = DataRowToModel(dt.Rows[n]);
+                    if (model != null)
+                    {
+                        modelList.Add(model);
+                    }
+                }
+            }
+            return modelList;
+        }
+        /// <summary>
+        /// 得到一个对象实体
+        /// </summary>
+        /// <param name="row"></param>
+        /// <returns></returns>
+        public static <%=_sourceTableName%>Info DataRowToModel(DataRow row)
+        {
+            <%=_sourceTableName%>Info model = new <%=_sourceTableName%>Info();
+            if (row != null)
+            {
+            DataTable dt=row.Table;
+                <% foreach(ColumnSchema col in SourceTable.NonForeignKeyColumns){ %>                   
+                    if (dt.Columns.Contains("<%=col.Name%>"))
+                        model.<%=col.Name%>= (<%=CSharpAlias[col.SystemType.FullName]%>)row["<%=col.Name%>"];
+                <%} %>
+                <% foreach(ColumnSchema col in SourceTable.ForeignKeyColumns){ %>
+                    if (dt.Columns.Contains("<%=col.Name%>"))  //外键处理
+                    <% string proName=Extern.StringProcess.RemoveStr_Id(col.Name); %>                      
+                        model.<%=proName%> = <%=proName%>Service.Get<%=proName%>ById((<%=CSharpAlias[col.SystemType.FullName]%>)row["<%=col.Name%>"]);
+                <%} %>
+            }
+            return model;
+        }
+
+        public virtual void InsertList(List<<%=_sourceTableName%>Info> oldLine)
+        {
+            using (SqlConnection myConnection = new SqlConnection(conString))
+            {
+                myConnection.Open();
+                SqlTransaction myTrans = myConnection.BeginTransaction(IsolationLevel.Serializable);
+                //为事务创建一个命令
+                List<<%=_sourceTableName%>Info> willinsert;
+                try
+                {
+                    CreateSqlCommandByTrans(myConnection, myTrans);
+                    //启动一个事务
+                    //事务级别为锁表，保证事务执行时，无其他数据入表，保证sqlbulk不会插入冗余数据
+                    //再一步的优化，可以把表ID键，另立缓存服务器。
+                    //单独的表锁，影响可以接受。因为并行的改和增不会太多。
+                    //加表锁。（其他事务不可改和写，但可以读）
+                    SqlCommon.LockTable(myCommand, tablename);
+                    //筛选出LIST<ciname>中 不在库里的 数据
+                    willinsert = CheckNames(oldLine, myCommand);
+                    if (willinsert.Count > 0)
+                    {
+                        //批量插入表
+                        InsertSqlBulk(willinsert, myConnection, myTrans);
+                    }
+                    myTrans.Commit();
+                }
+                //异常，回滚事务，删除Mongo中的之前添加的值。
+                catch (Exception ex)
+                {
+                    //回滚SQL事务
+                    myTrans.Rollback();
+                }
+                finally
+                {
+                    myConnection.Close();
+                }
+            }
+        }
+
+        public virtual void InsertWithUpdate(List<<%=_sourceTableName%>Info> oldcinemas)
+        {
+            //将INSERT的
+            List<<%=_sourceTableName%>Info> willinsert;
+            //mongodb已有的
+            List<<%=_sourceTableName%>Info> willupdate;
+            using (SqlConnection myConnection = new SqlConnection(conString))
+            {
+                myConnection.Open();
+                //启动一个事务
+                //事务级别为锁表，保证事务执行时，无其他数据入表，保证sqlbulk不会插入冗余数据
+                //再一步的优化，可以把表ID键，另立缓存服务器。
+                //单独的表锁，影响可以接受。因为并行的改和增不会太多。
+                SqlTransaction myTrans = myConnection.BeginTransaction(IsolationLevel.Serializable);
+                try
+                {   //为事务创建一个命令
+                    CreateSqlCommandByTrans(myConnection, myTrans);
+                    //加表锁。（其他事务不可改和写，但可以读）
+                    SqlCommon.LockTable(myCommand, tablename);
+                    //筛选出LIST<ciname>中 不在库里的 数据
+                    //用原表筛选
+
+                    willupdate = new List<<%=_sourceTableName%>Info>();
+                    willinsert = CheckNames(oldcinemas, myCommand, ref willupdate);
+                    //插入新数据
+                    if (willinsert.Count > 0)
+                    {
+                        //批量插入表
+                        InsertSqlBulk(willinsert, myConnection, myTrans);
+                    }
+                    if (willupdate.Count > 0)
+                    {
+                        //从传入的数据里匹配willupdate的数据，并更新要更改的字段
+                        int hasupdaterows = UpdateSqlBulk(willupdate, oldcinemas);
+                    }
+                    myTrans.Commit();
+                }
+                catch (Exception ex)
+                {
+                    //回滚SQL事务
+                    myTrans.Rollback();
+                }
+                finally
+                {
+                    myConnection.Close();
+                }
+            }
+        }
+
+
+        public void SyncSqlDataToMongoDB()
+        {
+            throw new NotImplementedException();
+        }
+    }
+    /// <summary>
+    /// <%=SourceTable.Description%>(<%=_sourceTableName%>)批量更新类（NOSQL验证）  Author:崔大鹏
+    /// </summary>
+    public class <%=_className%>SqlOperaNoSqlOpear:  <%=_className%>SqlOpera,INoSqlNeed<<%=_sourceTableName%>Info>
+    {
+
+        public <%=_className%>SqlOperaNoSqlOpear(string tablename)
+        {
+            base.tablename = tablename;
+        }
+
+        //创建MONGODB连接
+        private MongoCollection<<%=_sourceTableName%>Info> collection = MongoFactory.GetMongoCollction<<%=_sourceTableName%>Info>("TestDB", "Line");
+
+        /// <summary>
+        /// 更新NOSQL数据,用于更新，或回滚
+        /// </summary>
+        /// <param name="toList">要更新到的状态</param>
+        public void UpdateNoSqlBulk(List<<%=_sourceTableName%>Info> toList)
+        {  //更新mongodb,mongodb只能单条更新。
+            foreach (var item in toList)
+            {
+                var query = Query<<%=_sourceTableName%>Info>.EQ(e => e.Id, item.Id);
+                //更新哪个字段。
+                var updatecommand = Update<<%=_sourceTableName%>Info>.Set(e => e.State, item.State);
+                collection.Update(query, updatecommand);
+            }
+        }
+        /// <summary>
+        /// NOSQL筛选要插入的数据name
+        /// </summary>
+        /// <param name="willinsert"></param>
+        /// <param name="mongocollection"></param>
+        /// <returns></returns>
+        public List<<%=_sourceTableName%>Info> CheckNames(List<<%=_sourceTableName%>Info> willinsert, MongoDB.Driver.MongoCollection<<%=_sourceTableName%>Info> mongocollection)
+        {
+            //原有的所有名称
+            List<string> oldallnames = willinsert.Select(p => p.Name).ToList();
+            //名称MONGODB里有的的。
+            var mongohas = mongocollection.AsQueryable().Where(p => oldallnames.Contains(p.Name));
+            var hasnames = mongohas.Select(p => p.Name).ToList();
+            var willinset = willinsert.Where(p => !hasnames.Contains(p.Name)).ToList();
+            return willinset;
+        }
+
+        /// <summary>
+        /// NOSQL筛选要插入的数据name 及要更新的数据
+        /// </summary>
+        /// <param name="willinsert"></param>
+        /// <param name="mongocollection"></param>
+        /// <param name="willupdate"></param>
+        /// <returns></returns>
+        public List<<%=_sourceTableName%>Info> CheckNames(List<<%=_sourceTableName%>Info> willinsert, MongoDB.Driver.MongoCollection<<%=_sourceTableName%>Info> mongocollection, ref  List<<%=_sourceTableName%>Info> willupdate)
+        {
+            //原有的所有名称
+            List<string> oldallnames = willinsert.Select(p => p.Name).ToList();
+            //名称MONGODB里有的的。
+            willupdate = mongocollection.AsQueryable().Where(p => oldallnames.Contains(p.Name)).ToList();
+            var hasnames = willupdate.Select(p => p.Name).ToList();
+            var willinset = willinsert.Where(p => !hasnames.Contains(p.Name)).ToList();
+            return willinset;
+        }
+        /// <summary>
+        /// 插入SQL后同步插入NOSQL
+        /// </summary>
+        public void InsertListToNoSql(List<<%=_sourceTableName%>Info> willinsert, SqlCommand command)
+        {
+            //得到插入后的自增列的最大值。
+            command.CommandText = "select SCOPE_IDENTITY() ";
+            var row = command.ExecuteScalar();
+            int identify = 0;
+            if (row != null || row != DBNull.Value)
+            {
+                identify = Convert.ToInt32(row);
+            }
+            //int Identify=(int)  getidentify.ExecuteScalar();
+            //往MONGODB添数据，完成后再提交事务，会有性能损耗。
+            //但更安全。不然可能SQL操作完成，正在操作MONGO的过程中，又一个SQL操作来到，MONGO的数据和SQL有差别。
+            //提交完后，需要在mongodb里同步之前插入的数据。
+            for (int i = 0; i < willinsert.Count; i++)
+            {
+                //模拟自增1
+                willinsert[i].Id = identify - willinsert.Count + i + 1;
+            }
+            collection.InsertBatch(willinsert);
+        }
+        public override void InsertList(List<<%=_sourceTableName%>Info> oldLine)
+        {
+            using (SqlConnection myConnection = new SqlConnection(conString))
+            {
+                myConnection.Open();
+                SqlTransaction myTrans = myConnection.BeginTransaction(IsolationLevel.Serializable);
+                //为事务创建一个命令
+                List<<%=_sourceTableName%>Info> willinsert = new List<<%=_sourceTableName%>Info>();
+                try
+                {
+                    CreateSqlCommandByTrans(myConnection, myTrans);
+                    SqlCommon.LockTable(myCommand, tablename);
+                    //用mongodb筛选LIST<ciname>中 不在库里的 数据
+                    willinsert = CheckNames(oldLine, collection);
+                    if (willinsert.Count > 0)
+                    {
+                        //批量插入表
+                        InsertSqlBulk(willinsert, myConnection, myTrans);
+                        //同步插入NOSQL
+                        InsertListToNoSql(willinsert, myCommand);
+                    }
+                    myTrans.Commit();
+                }
+                //异常，回滚事务，删除Mongo中的之前添加的值。
+                catch (Exception ex)
+                {
+                    //回滚MONGODB
+                    IMongoQuery query = Query<<%=_sourceTableName%>Info>.In(p => p.Name, willinsert.Select(p => p.Name).ToList());
+                    collection.Remove(query);
+                    //回滚SQL事务
+                    myTrans.Rollback();
+                }
+                finally
+                {
+                    myConnection.Close();
+                }
+            }
+        }
+
+        public override void InsertWithUpdate(List<<%=_sourceTableName%>Info> oldcinemas)
+        {
+            //将INSERT的
+            List<<%=_sourceTableName%>Info> willinsert = new List<<%=_sourceTableName%>Info>();
+            //mongodb已有的
+            List<<%=_sourceTableName%>Info> willupdate = new List<<%=_sourceTableName%>Info>();
+
+            using (SqlConnection myConnection = new SqlConnection(conString))
+            {
+                myConnection.Open();
+                SqlTransaction myTrans = myConnection.BeginTransaction(IsolationLevel.Serializable);
+                try
+                {
+                    CreateSqlCommandByTrans(myConnection, myTrans);
+                    //加表锁。（其他事务不可改和写，但可以读）
+                    SqlCommon.LockTable(myCommand, tablename);
+                    //用mongodb筛选LIST<ciname>中 不在库里的 数据
+                    willinsert = CheckNames(oldcinemas, collection, ref  willupdate);
+                    if (willinsert.Count > 0)
+                    {
+                        InsertSqlBulk(willinsert, myConnection, myTrans);
+                        InsertListToNoSql(willinsert, myCommand);
+                    }
+                    //要更改的数据。willupdate是MONGO的原始数据带ID。留作备份。
+                    if (willupdate.Count > 0)
+                    {
+                        int hasupdaterows = UpdateSqlBulk(willupdate, oldcinemas);
+
+                        UpdateNoSqlBulk(oldcinemas);
+                    }
+                    myTrans.Commit();
+                }
+                //异常，回滚事务，删除Mongo中的之前添加的值。
+                //更新的数据回复原值。
+                catch (Exception ex)
+                {
+                    //回滚MONGODB INSERT数据
+                    IMongoQuery query = Query<<%=_sourceTableName%>Info>.In(p => p.Name, willinsert.Select(p => p.Name).ToList());
+                    collection.Remove(query);
+                    //回滚MONGODB UPDATE数据
+                    UpdateNoSqlBulk(willupdate);
+                    //回滚SQL事务
+                    myTrans.Rollback();
+                }
+                finally
+                {
+                    myConnection.Close();
+                }
+            }
+        }
+        public void SyncSqlDataToMongoDB()
+        {
+            SqlConnection myConnection = new SqlConnection(conString);
+            myConnection.Open();
+            SqlTransaction myTrans = myConnection.BeginTransaction(IsolationLevel.Serializable);
+            //为事务创建一个命令
+            SqlCommand myCommand = new SqlCommand();
+            myCommand.Connection = myConnection;
+            myCommand.Transaction = myTrans;
+            try
+            {
+                string sqlstring = "select * from " + tablename;
+                myCommand.CommandText = sqlstring;
+                SqlDataAdapter adapter = new SqlDataAdapter(myCommand);
+                DataSet ds = new DataSet();  //填充数据集
+                adapter.Fill(ds);
+                //SQL表中所有数据
+                List<<%=_sourceTableName%>Info> ls = DataTableToList(ds.Tables[0]);
+                //存到mongodb
+                collection.InsertBatch(ls);
+                //提交事务，可以插入新数据了。
+                myTrans.Commit();
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+    }
+
+ 
+}
+
+
+
+
+   

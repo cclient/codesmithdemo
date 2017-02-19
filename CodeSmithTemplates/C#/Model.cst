@@ -1,0 +1,73 @@
+﻿<%-- 
+Name:Model
+Author:黄鼎
+Description: 生成实体Model
+--%>
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Debug="False" Description="生成Model类." ResponseEncoding="utf-8"%>
+<%@ Assembly Name="System.Data" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Register Name="Extern" Template="StringProcess.cst"  %>
+<%@ Map Name="CSharpAlias" Src="System-CSharpAlias" Description="" %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="参数" Description="表名称" %>
+<%
+    string _dbName=StringUtil.ToPascalCase(SourceTable.Database.Name);
+    string _className=Extern.StringProcess.GetClassName(SourceTable.Name);
+      string _sourceTableName=SourceTable.Name;
+%>
+using System;
+<%--namespace <%=_dbName%>.Models{--%>
+namespace ent.BoxOffice.NewModel{
+
+    /// <summary>
+    /// <%=SourceTable.Description%>(<%=_sourceTableName%>Info)实体类
+    /// </summary>
+    public class <%=_sourceTableName%>Info
+    {
+        /// <summary>
+        /// <%=SourceTable.Description%>(<%=_sourceTableName%>Info)实体类
+        /// </summary>
+        public <%=_sourceTableName%>Info()
+        {
+            <% foreach(ColumnSchema col in SourceTable.Columns){ %>
+                <% if(col.IsForeignKeyMember){ %>
+                <% string colName=Extern.StringProcess.RemoveStr_Id(col.Name); %>
+                    _<%=colName%>=new <%=colName%>();
+                <% } %>
+            <%} %>
+        }
+      
+        #region 字段 
+        <% foreach (ColumnSchema column in SourceTable.Columns) { %>
+        <% if(column.IsForeignKeyMember){ %>
+                private <%=Extern.StringProcess.RemoveStr_Id(column.Name)%> _<%=Extern.StringProcess.RemoveStr_Id(column.Name)%>;
+        <% }else{%>
+                private <%=CSharpAlias[column.SystemType.FullName]%> _<%= StringUtil.ToPascalCase(column.Name)%>;
+        <% }} %> 
+        #endregion 字段
+        #region 属性
+        <% foreach (ColumnSchema column in SourceTable.Columns) { %>
+            <% if(column.IsForeignKeyMember){ %>
+                <% string colName=Extern.StringProcess.RemoveStr_Id(column.Name); %>
+                public <%=colName %> <%=colName %>
+                {
+                    set { _<%=colName%> = value; }
+                    get { return _<%=colName%>; }
+                }
+            <% }else{ %>
+                  /// <summary>
+                /// <%= column.Description %>
+                /// </summary>
+               <%-- public <%=CSharpAlias[column.SystemType.FullName]%> <%= StringUtil.ToPascalCase(column.Name)%>--%>
+                public <%=CSharpAlias[column.SystemType.FullName]%> <%= column.Name%>
+                {
+                    set { _<%= StringUtil.ToPascalCase(column.Name)%> = value; }
+                    get { return _<%= StringUtil.ToPascalCase(column.Name)%>; }
+                }            
+            <%} %>
+      
+        <% } %>      
+        #endregion 属性
+    }
+}

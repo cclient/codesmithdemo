@@ -1,0 +1,96 @@
+﻿<#@ template language="c#" HostSpecific="True" #>
+<#@ output extension= ".cs" #>
+<#
+	TableHost host = (TableHost)(Host);		
+	string ModelSpace = host.NameSpace+".Model."+ host.GetModelClass(host.TableName);
+	string DALSpace= host.NameSpace+".DAL."+ host.GetDALClass(host.TableName);
+	ColumnInfo identityKey=host.IdentityKey;
+	string returnValue = "void";
+    if (identityKey!=null)
+    {         
+         returnValue = CodeCommon.DbTypeToCS(identityKey.TypeName);              
+    }
+#>
+using System; 
+using System.Text;
+using System.Collections.Generic; 
+using System.Data;
+using System.Linq;
+using Byecity.Memcached.Models;
+using System.Data.SqlClient;
+namespace <#= host.NameSpace #>.BLL <# if( host.Folder.Length > 0){ #>.<#= host.Folder #><# } #>
+{
+	<# if( host.TableDescription.Length > 0) {#>
+ 	//<#= host.TableDescription #>
+	<# } #>
+	public partial class <#= host.GetBLLClass(host.TableName) #>
+	{
+		public <#= host.GetBLLClass(host.TableName) #>()
+		{}
+		#region  Method
+		/// <summary>
+		/// 获得数据列表
+		/// </summary>
+		
+		
+		    public override List<<#= host.GetBLLClass(host.TableName) #>> ListPaggerView(int pageSize, int pageIndex, string sqlWhere, out int totalCount) {
+	   totalCount = 0;
+            var modelList = new List<<#= host.GetBLLClass(host.TableName) #>>(pageSize);
+            DataSet ds = Singleton<SqlHelper>.Instance.GetPageDataSet(ConnectionType.WebDB, "<#= host.GetBLLClass(host.TableName) #>", pageSize, pageIndex, sqlWhere, out totalCount);
+            if (ds != null && ds.Tables[0] != null) {
+                var dataRows = ds.Tables[0].Rows;
+                for (int i = 0; i < dataRows.Count; i++) {
+                    <#= host.GetBLLClass(host.TableName) #>  model = new <#= host.GetBLLClass(host.TableName) #>() ;	
+					<# foreach (ColumnInfo c in host.Fieldlist) { #>
+				<# if(CodeCommon.DbTypeToCS(c.TypeName)=="int"||
+				CodeCommon.DbTypeToCS(c.TypeName)=="long"||
+				CodeCommon.DbTypeToCS(c.TypeName)=="float"||
+				CodeCommon.DbTypeToCS(c.TypeName)=="DateTime"||
+				CodeCommon.DbTypeToCS(c.TypeName)=="decimal")
+				{#>
+				if(!string.IsNullOrEmpty(dataRows[i]["<#=c.ColumnName#>"].ToString()))
+				{
+			  model.<#=c.ColumnName#>= <#=CodeCommon.DbTypeToCS(c.TypeName)#>.Parse(dataRows[i]["<#=c.ColumnName#>"].ToString());
+				}
+				<# } #>
+				<# if(CodeCommon.DbTypeToCS(c.TypeName)=="string") {#>
+			 model.<#=c.ColumnName#> = dataRows[i]["<#=c.ColumnName#>"].ToString();
+				<# } #>
+				<# if(CodeCommon.DbTypeToCS(c.TypeName)=="byte[]") {#>
+				if(dt.Rows[n]["<#=c.ColumnName#>"].ToString()!="")
+				{
+					model.<#=c.ColumnName#>= (byte[])dt.Rows[n]["<#=c.ColumnName#>"];
+				}
+				<# } #>
+				<# if(CodeCommon.DbTypeToCS(c.TypeName)=="Guid") {#>
+				if(dt.Rows[n]["<#=c.ColumnName#>"].ToString()!="")
+				{
+					model.<#=c.ColumnName#>= dt.Rows[n]["<#=c.ColumnName#>"].ToString();
+				}
+				<# } #>
+				<# if(CodeCommon.DbTypeToCS(c.TypeName)=="bool") {#>
+				if(!string.IsNullOrEmpty(dataRows[i]["<#=c.ColumnName#>"].ToString()))
+				{
+					if((dataRows[i]["<#=c.ColumnName#>"].ToString()=="1")||(dataRows[i]["<#=c.ColumnName#>"].ToString().ToLower()=="true"))
+					{
+					model.<#=c.ColumnName#>= true;
+					}
+					else
+					{
+					model.<#=c.ColumnName#>= false;
+					}
+				}
+				<# } #>
+				<# } #>		
+				
+					modelList.Add(model);
+				}
+			}
+			return modelList;
+		}
+
+	
+#endregion
+   
+	}
+}

@@ -1,0 +1,301 @@
+
+<%@ CodeTemplate Language="C#" TargetLanguage="C#" Description="Generates a C# class for use with NHibnate" %>
+<%@ Property Name="SourceTable" Type="SchemaExplorer.TableSchema" Category="Context" Description="Table that the mapping file is based on" %>
+<%@ Property Name="Namespace" Type="System.String" Default="MyNamespace.Data" Category="Object" Description="The class namespace that the mapping file should use" %>
+<%@ Property Name="Assembly" Type="System.String" Default="MyApp.MyAssembly" Category="Object" Description="The assembly that the class will be used in" %>
+<%@ Property Name="RemoveTablePrefix" Type="System.String" Default="tbl" Category="Object" Description="The prefix to remove from table names" %>
+<%@ Property Name="ForceId" Type="System.Boolean" Default="true" Category="Object" Description="Force Id for identity column" %>
+<%@ Assembly Name="SchemaExplorer" %>
+<%@ Assembly Name="System.Data" %>
+<%@ Import Namespace="SchemaExplorer" %>
+<%@ Import Namespace="System.Data" %>
+<%@ Import Namespace="System.Text.RegularExpressions" %>
+using System;
+using System.Collections;
+
+namespace <%= Namespace %>
+{
+	
+
+	/// <summary>
+	/// <%= ClassName(SourceTable) %> object for NHibernate mapped table '<%= ClassTable(SourceTable) %>'.
+	/// </summary>
+	public class <%= ClassName(SourceTable) %>
+	{
+		#region Member Variables
+		
+		<% if (SourceTable.PrimaryKey.MemberColumns.Count == 1) {%>
+		protected <%= IdMemberType(SourceTable) %> <%= IdMemberName(SourceTable) %>;
+		<% } %>		
+		<% foreach(ColumnSchema column in SourceTable.NonKeyColumns) { %>
+		protected <%= MemberType(column) %> <%= MemberName(column) %>;
+		<% } %>
+		<% foreach (TableKeySchema foreignKey in SourceTable.ForeignKeys) { %>
+		protected <%= ManyToOneClass(foreignKey) %> <%= ManyToOneMemberName(foreignKey) %>;
+		<% if ((foreignKey.ForeignKeyTable == SourceTable) && (foreignKey.PrimaryKeyTable == SourceTable)) { %>
+		protected <%= CollectionType(foreignKey)%> <%= CollectionMemberName(foreignKey)%>;
+		<% } %>
+		<% } %>
+		<% foreach(TableKeySchema primaryKey in SourceTable.PrimaryKeys) { %>
+		<% if (IsManyToManyTable(primaryKey.ForeignKeyTable)) { %>
+		protected <%= CollectionType(primaryKey)%> <%= CollectionManyToManyMemberName(primaryKey)%>;
+		<% } else if (IsOneToOneTable(primaryKey)) { %>
+		protected <%= OneToOneClass(primaryKey) %> <%= OneToOneMemberName(primaryKey) %>;
+		<% } else if (IsSubClassTable(primaryKey)) { %>
+		<% } else { %>
+		protected <%= CollectionType(primaryKey)%> <%= CollectionMemberName(primaryKey)%>;
+		<% } %>
+		<% } %>
+
+		#endregion
+
+		#region Constructors
+
+		public <%= ClassName(SourceTable) %>() { }
+
+		public <%= ClassName(SourceTable) %>( <%
+			int count = 0;
+			foreach(ColumnSchema column in SourceTable.NonKeyColumns)
+			{
+				if (count > 0) Response.Write(", ");
+				%><%= MemberType(column) %> <%= ParameterName(column) %><%
+				count ++;
+			}
+			foreach(TableKeySchema foreignKey in SourceTable.ForeignKeys)
+			{
+				if (count > 0) Response.Write(", ");
+				%><%= ManyToOneClass(foreignKey) %> <%= ManyToOneParameterName(foreignKey) %><%
+				count ++;
+			}
+			%> )
+		{
+		<% foreach(ColumnSchema column in SourceTable.NonKeyColumns) { %>
+			this.<%= MemberName(column) %> = <%= ParameterName(column) %>;
+		<% } %>
+		<% foreach(TableKeySchema foreignKey in SourceTable.ForeignKeys) { %>
+			this.<%= ManyToOneMemberName(foreignKey) %> = <%= ManyToOneParameterName(foreignKey) %>;
+		<% } %>
+		}
+
+		#endregion
+
+		#region Public Properties
+
+		<% if (SourceTable.PrimaryKey.MemberColumns.Count == 1) {%>
+		public virtual <%= IdMemberType(SourceTable) %> <%= IdName(SourceTable) %>
+		{
+			get {return <%= IdMemberName(SourceTable) %>;}
+			<% if (IdMemberType(SourceTable) == "string" ) {%>
+			set
+			{
+				if ( value != null && value.Length > <%= ColumnLength(SourceTable.PrimaryKey.MemberColumns[0])%>)
+					throw new ArgumentOutOfRangeException("Invalid value for <%= IdName(SourceTable) %>", value, value.ToString());
+				<%= IdMemberName(SourceTable) %> = value;
+			}
+			<% } else { %>
+			set {<%= IdMemberName(SourceTable) %> = value;}
+			<% } %>
+		}
+		<% } %>
+
+		<% foreach(ColumnSchema column in SourceTable.NonKeyColumns) { %>
+		public virtual  <%= MemberType(column) %> <%= PropertyName(column) %>
+		{
+			get { return <%= MemberName(column) %>; }
+			<% if (MemberType(column) == "string") {%>
+			set
+			{
+				if ( value != null && value.Length > <%= ColumnLength(column)%>)
+					throw new ArgumentOutOfRangeException(" Invalid value for <%= PropertyName(column) %>", value, value.ToString());
+				<%= MemberName(column) %> = value;
+			}
+			<% } else { %>
+			set { <%= MemberName(column) %> = value; }
+			<% } %>
+		}
+
+		<% } %>
+		<% foreach(TableKeySchema foreignKey in SourceTable.ForeignKeys) { %>
+		public virtual <%= ManyToOneClass(foreignKey) %> <%= ManyToOneName(foreignKey) %>
+		{
+			get { return <%= ManyToOneMemberName(foreignKey) %>; }
+			set { <%= ManyToOneMemberName(foreignKey) %> = value; }
+		}
+
+		<% if ((foreignKey.ForeignKeyTable == SourceTable) && (foreignKey.PrimaryKeyTable == SourceTable)) { %>
+		public virtual  <%= CollectionType(foreignKey) %> <%= CollectionName(foreignKey) %>
+		{
+			get { return <%= CollectionMemberName(foreignKey) %>; }
+			set { <%= CollectionMemberName(foreignKey) %> = value; }
+		}
+
+		<% } %>
+		<% } %>
+		<% foreach(TableKeySchema primaryKey in SourceTable.PrimaryKeys) { %>
+		<% if (IsManyToManyTable(primaryKey.ForeignKeyTable)) { %>
+		public virtual  <%= CollectionType(primaryKey) %> <%= CollectionManyToManyName(primaryKey) %>
+		{
+			get
+			{
+				if (<%= CollectionManyToManyMemberName(primaryKey) %>==null)
+					{
+					<%= CollectionManyToManyMemberName(primaryKey) %> = <%= NewCollectionType(primaryKey) %>;
+				}
+				return <%= CollectionManyToManyMemberName(primaryKey) %>;
+			}
+			set { <%= CollectionManyToManyMemberName(primaryKey) %> = value; }
+		}
+
+		<% } else if (IsOneToOneTable(primaryKey)) { %>
+		public virtual  <%= OneToOneClass(primaryKey) %> <%= OneToOneName(primaryKey) %>
+		{
+			get { return <%= OneToOneMemberName(primaryKey) %>; }
+			set { <%= OneToOneMemberName(primaryKey) %> = value; }
+		}
+
+		<% } else if (IsSubClassTable(primaryKey)) { %>
+		<% } else { %>
+		public virtual <%= CollectionType(primaryKey) %> <%= CollectionName(primaryKey) %>
+		{
+			get
+			{
+				if (<%= CollectionMemberName(primaryKey) %>==null)
+				{
+					<%= CollectionMemberName(primaryKey) %> = <%= NewCollectionType(primaryKey) %>;
+				}
+				return <%= CollectionMemberName(primaryKey) %>;
+			}
+			set { <%= CollectionMemberName(primaryKey) %> = value; }
+		}
+
+		<% } %>
+		<% } %>
+		
+
+		#endregion
+		<% foreach(TableKeySchema primaryKey in SourceTable.PrimaryKeys) { %>
+		<% if (IsManyToManyTable(primaryKey.ForeignKeyTable)) { } %>
+		<% else if (IsSubClassTable(primaryKey)) { %>
+
+	#region <%= JoinedSubclassName(primaryKey) %>
+
+	/// <summary>
+	/// <%= JoinedSubclassName(primaryKey) %> object for NHibernate mapped table '<%= JoinedSubclassTable(primaryKey) %>'.
+	/// </summary>
+	public class <%= JoinedSubclassName(primaryKey) %> : <%= ClassName(SourceTable) %>
+	{
+		#region Member Variables
+
+		<% foreach(ColumnSchema column in primaryKey.ForeignKeyTable.NonKeyColumns) { %>
+		protected <%= MemberType(column) %> <%= MemberName(column) %>;
+		<% } %>
+		<% foreach (TableKeySchema foreignKey in primaryKey.ForeignKeyTable.ForeignKeys) { %>
+		<% if (foreignKey.PrimaryKeyTable != SourceTable) { %>
+		protected <%= ManyToOneClass(foreignKey) %> <%= ManyToOneMemberName(foreignKey) %>;
+		<% } %>
+		<% if ((foreignKey.ForeignKeyTable == primaryKey.ForeignKeyTable) && (foreignKey.PrimaryKeyTable == primaryKey.ForeignKeyTable)) { %>
+		protected <%= CollectionType(foreignKey)%> <%= CollectionMemberName(foreignKey)%>;
+		<% } %>
+		<% } %>
+
+		#endregion
+
+		#region Constructors
+
+		public <%= JoinedSubclassName(primaryKey) %>() : base() { }
+
+		public <%= JoinedSubclassName(primaryKey) %>( <%
+			count = 0;
+			foreach(ColumnSchema column in SourceTable.NonKeyColumns)
+			{
+				if (count > 0) Response.Write(", ");
+				%><%= MemberType(column) %> <%= ParameterName(column) %><%
+				count ++;
+			}
+			foreach(TableKeySchema foreignKey in SourceTable.ForeignKeys)
+			{
+				if (count > 0) Response.Write(", ");
+				%><%= ManyToOneClass(foreignKey) %> <%= ManyToOneParameterName(foreignKey) %><%
+				count ++;
+			}
+			foreach(ColumnSchema column in primaryKey.ForeignKeyTable.NonKeyColumns)
+			{
+				if (count > 0) Response.Write(", ");
+				%><%= MemberType(column) %> <%= ParameterName(column) %><%
+				count ++;
+			}
+			foreach(TableKeySchema foreignKey in primaryKey.ForeignKeyTable.ForeignKeys)
+			{
+				if (foreignKey.PrimaryKeyTable != SourceTable)
+				{
+					if (count > 0) Response.Write(", ");
+					%><%= ManyToOneClass(foreignKey) %> <%= ManyToOneParameterName(foreignKey) %><%
+					count ++;
+				}
+			}
+			%> ) : base(<%
+			count = 0;
+			foreach(ColumnSchema column in SourceTable.NonKeyColumns)
+			{
+				if (count > 0) Response.Write(", ");
+				%><%= ParameterName(column) %><%
+				count ++;
+			}
+			foreach(TableKeySchema foreignKey in SourceTable.ForeignKeys)
+			{
+				if (count > 0) Response.Write(", ");
+				%><%= ManyToOneParameterName(foreignKey) %><%
+				count ++;
+			}
+			%>)
+		{
+		<% foreach(ColumnSchema column in primaryKey.ForeignKeyTable.NonKeyColumns) { %>
+			this.<%= MemberName(column) %> = <%= ParameterName(column) %>;
+		<% } %>
+		<% foreach (TableKeySchema foreignKey in primaryKey.ForeignKeyTable.ForeignKeys) { %>
+		<% if (foreignKey.PrimaryKeyTable != SourceTable) { %>
+			this.<%= ManyToOneName(foreignKey) %> = <%= ManyToOneParameterName(foreignKey) %>;
+		<% } %>
+		<% } %>
+		}
+
+		#endregion
+
+		#region Public Properties
+
+		<% foreach(ColumnSchema column in primaryKey.ForeignKeyTable.NonKeyColumns) { %>
+		public virtual  <%= MemberType(column) %> <%= PropertyName(column) %>
+		{
+			get { return <%= MemberName(column) %>; }
+			set { <%= MemberName(column) %> = value; }
+		}
+
+		<% } %>
+		<% foreach(TableKeySchema foreignKey in primaryKey.ForeignKeyTable.ForeignKeys) { %>
+		<% if (foreignKey.PrimaryKeyTable != SourceTable) { %>
+		public virtual <%= ManyToOneClass(foreignKey) %> <%= ManyToOneName(foreignKey) %>
+		{
+			get { return <%= ManyToOneMemberName(foreignKey) %>; }
+			set { <%= ManyToOneMemberName(foreignKey) %> = value; }
+		}
+
+		<% } %>
+		<% if ((foreignKey.ForeignKeyTable == primaryKey.ForeignKeyTable) && (foreignKey.PrimaryKeyTable == primaryKey.ForeignKeyTable)) { %>
+		public virtual  <%= CollectionType(foreignKey) %> <%= CollectionName(foreignKey) %>
+		{
+			get { return <%= CollectionName(foreignKey) %>; }
+			set { <%= CollectionName(foreignKey) %> = value; }
+		}
+
+		<% } %>
+		<% } %>
+		#endregion
+	}
+
+	#endregion
+		<% } %>
+		<% } %>
+	}
+	
+<!-- #include file="NHibernate.inc" -->
+}
